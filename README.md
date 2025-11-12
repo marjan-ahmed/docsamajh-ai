@@ -458,11 +458,9 @@ MIT License - feel free to use and adapt
 
 ## 👥 Team
 
-**[Your Team Name]**
+**Marvix**
 
-- **[Your Name]** - Full Stack Development, AI Engineering
-- **[Team Member 2]** - UI/UX, Demo Preparation
-- **[Team Member 3]** - Documentation, Testing
+- **Marjan Ahmed (me)** - Full Stack Development, Agentic AI Developer (worked solo)
 
 ---
 
@@ -477,17 +475,16 @@ MIT License - feel free to use and adapt
 
 ## 📞 Contact
 
-- **GitHub**: [github.com/yourusername/findoc-ai-pro](https://github.com/yourusername)
-- **Demo Video**: [YouTube Link]
-- **Live Demo**: [Deployed App URL]
-- **Email**: your.email@example.com
+- **GitHub**: [github.com/marjan-ahmed/docsamjho-ai](https://github.com/marjan-ahmed/docsamjho-ai)
+- **Live Demo**: https://docsamjho-ai.streamlit.app/
+- **Email**: marjanahmed.dev@gmail.com
 
 ---
 
 <div align="center">
 
-**Built with ❤️ for the AI Financial Hackathon Championship 2024**
+**Built with ❤️ for the AI Financial Hackathon Championship 2025**
 
-Powered by LandingAI ADE • Google Gemini • Streamlit
+Powered by LandingAI ADE • OpenAI Agents SDK • Google Gemini • Streamlit
 
 </div>
