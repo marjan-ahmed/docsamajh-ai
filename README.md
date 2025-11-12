@@ -95,8 +95,8 @@ An **agentic AI platform** that:
 
 ```bash
 # Clone the repository
-git clone https://github.com/marjan-ahmed/docsamajh.git
-cd docsamajh
+git clone https://github.com/marjan-ahmed/docsamajh-ai.git
+cd docsamajh-ai
 
 # Create virtual environment
 python -m venv .venv
