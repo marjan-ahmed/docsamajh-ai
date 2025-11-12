@@ -476,9 +476,10 @@ MIT License - feel free to use and adapt
 
 ## 📞 Contact
 
-- **GitHub**: [github.com/marjan-ahmed/docsamjho-ai](https://github.com/marjan-ahmed/docsamjho-ai)
-- **Live Demo**: https://docsamjho-ai.streamlit.app/
-- **Email**: marjanahmed.dev@gmail.com
+- **GitHub**: [marjan-ahmed/docsamjho-ai](https://github.com/marjan-ahmed/docsamjho-ai)  
+- **Live Demo**: [docsamjho-ai.streamlit.app](https://docsamjho-ai.streamlit.app/)  
+- **YouTube Demo**: [Watch Video](https://youtu.be/mwP9qhZwSSs)  
+- **Email**: [marjanahmed.dev@gmail.com](mailto:marjanahmed.dev@gmail.com)
 
 ---
 
