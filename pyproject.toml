@@ -1,0 +1,24 @@
+[project]
+name = "docsamajh"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+ "aiohttp>=3.13.2",
+ "openai-agents>=0.5.0",
+ "python-dotenv>=1.2.1",
+ "streamlit>=1.51.0",
+]
+[[project.authors]]
+name = "Marjan Ahmed"
+email = "marjan.ahmed08@yahoo.com"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+docsamajh = "docsamajh:main"
+financial-assistant = "docsamajh.main:start"
+docsamajh-financial-assistant = "docsamajh.main:start"
