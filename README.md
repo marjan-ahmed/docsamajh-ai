@@ -76,7 +76,7 @@ An **agentic AI platform** that:
 
 - **Document AI**: LandingAI ADE (Parse + Extract APIs)
 - **LLM**: Google Gemini 2.5 Flash
-- **Agent Framework**: `agents` library with function tools
+- **Agent Framework**: `openai-agents` library by OpenAI
 - **Frontend**: Streamlit with custom CSS
 - **Data Processing**: Pandas, aiohttp, async/await
 - **Language**: Python 3.10+
