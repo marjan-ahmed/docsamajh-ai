@@ -2,13 +2,14 @@
 
 **Intelligent Financial Document Reconciliation Platform**
 
-> Winner submission for the LandingAI Financial Hackathon Championship 2024
+> Winner submission for the LandingAI Financial Hackathon Championship 2025
 > 
-> Powered by LandingAI ADE + Google Gemini + Multi-Agent Framework
+> Powered by LandingAI ADE + Google Gemini + OpenAI Agents SDK Framework + Streamlit UI
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Streamlit](https://img.shields.io/badge/streamlit-1.44+-red.svg)
+![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI%20Agents-SDK-blue.svg)
 
 ---
 
