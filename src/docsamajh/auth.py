@@ -34,8 +34,14 @@ GOOGLE_CLIENT_ID = os.getenv("CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 
 # GitHub OAuth Configuration
-GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
-GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+# Use separate OAuth app for local development if provided
+if ENV == "production":
+    GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+    GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+else:
+    # Local development - use local OAuth app if available, otherwise use production
+    GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID_LOCAL") or os.getenv("GITHUB_CLIENT_ID")
+    GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET_LOCAL") or os.getenv("GITHUB_CLIENT_SECRET")
 
 # OAuth scopes
 GOOGLE_SCOPES = [

@@ -714,7 +714,7 @@ def show_login_page():
                 with col_oauth1:
                     if google_auth_url:
                         st.markdown(f"""
-                            <a href="{google_auth_url}" target="_self" style="
+                            <a href="{google_auth_url}" target="_blank" style="
                                 display: inline-flex;
                                 align-items: center;
                                 justify-content: center;
@@ -742,7 +742,7 @@ def show_login_page():
                 with col_oauth2:
                     if github_auth_url:
                         st.markdown(f"""
-                            <a href="{github_auth_url}" target="_self" style="
+                            <a href="{github_auth_url}" target="_blank" style="
                                 display: inline-flex;
                                 align-items: center;
                                 justify-content: center;
