@@ -22,9 +22,9 @@ ENV = os.getenv("ENV", "local")  # default is local
 
 # Set redirect URI based on environment
 if ENV == "production":
-    REDIRECT_URI = "https://docsamajh-ai.streamlit.app/"
+    REDIRECT_URI = "https://docsamajh-ai.streamlit.app"
 else:
-    REDIRECT_URI = "http://localhost:8501/"
+    REDIRECT_URI = "http://localhost:8501"
 
 # Database setup
 DB_PATH = "docsamajh_users.db"
