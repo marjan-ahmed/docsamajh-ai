@@ -37,9 +37,6 @@ GOOGLE_CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
 
-# Redirect URI - configurable via environment variable
-REDIRECT_URI = os.getenv("REDIRECT_URI")  # Streamlit default
-
 # OAuth scopes
 GOOGLE_SCOPES = [
     "openid",
