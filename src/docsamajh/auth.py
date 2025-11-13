@@ -246,8 +246,9 @@ def authenticate_user(username: str, password: str) -> Optional[Dict]:
         return None
 
 def authenticate_google_user(google_id: str, email: str, name: str, picture: str) -> Optional[Dict]:
-    """Authenticate or create user via Google OAuth"""
+    """Authenticate or create user via Google OAuth - Auto-registration enabled"""
     try:
+        print(f"[DEBUG] Authenticating Google user: {email}")
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
@@ -262,86 +263,102 @@ def authenticate_google_user(google_id: str, email: str, name: str, picture: str
         user = cursor.fetchone()
         
         if user:
+            print(f"[DEBUG] Existing user found, updating login time")
             # Update last login and profile picture
             cursor.execute("""
                 UPDATE users
-                SET last_login = ?, profile_picture = ?
+                SET last_login = ?, profile_picture = ?, full_name = ?
                 WHERE user_id = ?
-            """, (datetime.now(), picture, user[0]))
+            """, (datetime.now(), picture, name, user[0]))
             conn.commit()
             
             user_data = {
                 "user_id": user[0],
                 "username": user[1],
                 "email": user[2],
-                "full_name": user[3],
+                "full_name": name,  # Use latest name from Google
                 "company": user[4],
                 "created_at": user[5],
                 "is_active": user[6],
-                "profile_picture": user[7],
+                "profile_picture": picture,  # Use latest picture from Google
                 "auth_provider": user[8]
             }
             conn.close()
             return user_data
-        else:
-            # Check if email already exists (link accounts)
+        
+        # Check if email already exists with different auth method (link accounts)
+        cursor.execute("""
+            SELECT user_id, username FROM users WHERE email = ? AND is_active = 1
+        """, (email,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            print(f"[DEBUG] Linking Google account to existing user: {existing[1]}")
+            # Link Google account to existing user
             cursor.execute("""
-                SELECT user_id FROM users WHERE email = ?
-            """, (email,))
-            existing = cursor.fetchone()
+                UPDATE users
+                SET google_id = ?, profile_picture = ?, auth_provider = 'google', last_login = ?
+                WHERE user_id = ?
+            """, (google_id, picture, datetime.now(), existing[0]))
+            conn.commit()
+            conn.close()
             
-            if existing:
-                # Link Google account to existing user
-                cursor.execute("""
-                    UPDATE users
-                    SET google_id = ?, profile_picture = ?, last_login = ?
-                    WHERE user_id = ?
-                """, (google_id, picture, datetime.now(), existing[0]))
-                conn.commit()
-                conn.close()
-                
-                # Return updated user data
-                return authenticate_google_user(google_id, email, name, picture)
-            else:
-                # Create new user
-                username = email.split('@')[0]
-                # Make username unique if needed
-                base_username = username
-                counter = 1
-                while True:
-                    cursor.execute("SELECT user_id FROM users WHERE username = ?", (username,))
-                    if not cursor.fetchone():
-                        break
-                    username = f"{base_username}{counter}"
-                    counter += 1
-                
-                cursor.execute("""
-                    INSERT INTO users (username, email, full_name, google_id, 
-                                     profile_picture, auth_provider, password_hash)
-                    VALUES (?, ?, ?, ?, ?, 'google', NULL)
-                """, (username, email, name, google_id, picture))
-                
-                user_id = cursor.lastrowid
-                
-                # Initialize user stats
-                cursor.execute("""
-                    INSERT INTO user_stats (user_id)
-                    VALUES (?)
-                """, (user_id,))
-                
-                # Update last login
-                cursor.execute("""
-                    UPDATE users SET last_login = ? WHERE user_id = ?
-                """, (datetime.now(), user_id))
-                
-                conn.commit()
-                conn.close()
-                
-                # Return new user data
-                return authenticate_google_user(google_id, email, name, picture)
+            # Return updated user data
+            return authenticate_google_user(google_id, email, name, picture)
+        
+        # Create new user (auto-registration)
+        print(f"[DEBUG] Creating new user from Google account: {email}")
+        username = email.split('@')[0]
+        base_username = username
+        counter = 1
+        
+        # Make username unique
+        while True:
+            cursor.execute("SELECT user_id FROM users WHERE username = ?", (username,))
+            if not cursor.fetchone():
+                break
+            username = f"{base_username}{counter}"
+            counter += 1
+        
+        # Insert new user
+        cursor.execute("""
+            INSERT INTO users (username, email, full_name, google_id, 
+                             profile_picture, auth_provider, password_hash, last_login)
+            VALUES (?, ?, ?, ?, ?, 'google', NULL, ?)
+        """, (username, email, name, google_id, picture, datetime.now()))
+        
+        user_id = cursor.lastrowid
+        
+        # Initialize user stats
+        cursor.execute("""
+            INSERT INTO user_stats (user_id)
+            VALUES (?)
+        """, (user_id,))
+        
+        conn.commit()
+        
+        print(f"[SUCCESS] Created new Google user: {username} (ID: {user_id})")
+        
+        # Return new user data
+        user_data = {
+            "user_id": user_id,
+            "username": username,
+            "email": email,
+            "full_name": name,
+            "company": "",
+            "created_at": datetime.now().isoformat(),
+            "is_active": 1,
+            "profile_picture": picture,
+            "auth_provider": "google"
+        }
+        
+        conn.close()
+        return user_data
         
     except Exception as e:
-        print(f"Google authentication error: {e}")
+        print(f"[ERROR] Google authentication error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def verify_google_token(token: str) -> Optional[Dict]:
@@ -367,8 +384,9 @@ def verify_google_token(token: str) -> Optional[Dict]:
         return None
 
 def authenticate_github_user(github_id: str, email: str, name: str, username: str, picture: str) -> Optional[Dict]:
-    """Authenticate or create user via GitHub OAuth"""
+    """Authenticate or create user via GitHub OAuth - Auto-registration enabled"""
     try:
+        print(f"[DEBUG] Authenticating GitHub user: {username} ({email})")
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
@@ -383,82 +401,97 @@ def authenticate_github_user(github_id: str, email: str, name: str, username: st
         user = cursor.fetchone()
         
         if user:
-            # Update last login and profile picture
+            print(f"[DEBUG] Existing user found, updating login time")
+            # Update last login, profile picture, and name
             cursor.execute("""
                 UPDATE users
-                SET last_login = ?, profile_picture = ?
+                SET last_login = ?, profile_picture = ?, full_name = ?
                 WHERE user_id = ?
-            """, (datetime.now(), picture, user[0]))
+            """, (datetime.now(), picture, name, user[0]))
             conn.commit()
             
             user_data = {
                 "user_id": user[0],
                 "username": user[1],
                 "email": user[2],
-                "full_name": user[3],
+                "full_name": name,  # Use latest name from GitHub
                 "company": user[4],
                 "created_at": user[5],
                 "is_active": user[6],
-                "profile_picture": user[7],
+                "profile_picture": picture,  # Use latest picture from GitHub
                 "auth_provider": user[8]
             }
             conn.close()
             return user_data
-        else:
-            # Check if email already exists (link accounts)
-            if email:
+        
+        # Check if email already exists with different auth method (link accounts)
+        if email and not email.endswith("@github.users.noreply.com"):
+            cursor.execute("""
+                SELECT user_id, username FROM users WHERE email = ? AND is_active = 1
+            """, (email,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                print(f"[DEBUG] Linking GitHub account to existing user: {existing[1]}")
+                # Link GitHub account to existing user
                 cursor.execute("""
-                    SELECT user_id FROM users WHERE email = ?
-                """, (email,))
-                existing = cursor.fetchone()
-                
-                if existing:
-                    # Link GitHub account to existing user
-                    cursor.execute("""
-                        UPDATE users
-                        SET github_id = ?, profile_picture = ?, last_login = ?
-                        WHERE user_id = ?
-                    """, (github_id, picture, datetime.now(), existing[0]))
-                    conn.commit()
-                    conn.close()
-                    return authenticate_github_user(github_id, email, name, username, picture)
-            
-            # Create new user
-            final_username = username or (email.split('@')[0] if email else f"user{github_id[:8]}")
-            base_username = final_username
-            counter = 1
-            while True:
-                cursor.execute("SELECT user_id FROM users WHERE username = ?", (final_username,))
-                if not cursor.fetchone():
-                    break
-                final_username = f"{base_username}{counter}"
-                counter += 1
-            
-            cursor.execute("""
-                INSERT INTO users (username, email, full_name, github_id, 
-                                 profile_picture, auth_provider, password_hash)
-                VALUES (?, ?, ?, ?, ?, 'github', NULL)
-            """, (final_username, email or f"{github_id}@github.users.noreply.com", 
-                  name, github_id, picture))
-            
-            user_id = cursor.lastrowid
-            
-            # Initialize user stats
-            cursor.execute("""
-                INSERT INTO user_stats (user_id)
-                VALUES (?)
-            """, (user_id,))
-            
-            # Update last login
-            cursor.execute("""
-                UPDATE users SET last_login = ? WHERE user_id = ?
-            """, (datetime.now(), user_id))
-            
-            conn.commit()
-            conn.close()
-            
-            # Return new user data
-            return authenticate_github_user(github_id, email, name, username, picture)
+                    UPDATE users
+                    SET github_id = ?, profile_picture = ?, auth_provider = 'github', last_login = ?
+                    WHERE user_id = ?
+                """, (github_id, picture, datetime.now(), existing[0]))
+                conn.commit()
+                conn.close()
+                return authenticate_github_user(github_id, email, name, username, picture)
+        
+        # Create new user (auto-registration)
+        print(f"[DEBUG] Creating new user from GitHub account: {username}")
+        final_username = username or (email.split('@')[0] if email else f"user{github_id[:8]}")
+        base_username = final_username
+        counter = 1
+        
+        # Make username unique
+        while True:
+            cursor.execute("SELECT user_id FROM users WHERE username = ?", (final_username,))
+            if not cursor.fetchone():
+                break
+            final_username = f"{base_username}{counter}"
+            counter += 1
+        
+        # Insert new user
+        final_email = email or f"{github_id}@github.users.noreply.com"
+        cursor.execute("""
+            INSERT INTO users (username, email, full_name, github_id, 
+                             profile_picture, auth_provider, password_hash, last_login)
+            VALUES (?, ?, ?, ?, ?, 'github', NULL, ?)
+        """, (final_username, final_email, name, github_id, picture, datetime.now()))
+        
+        user_id = cursor.lastrowid
+        
+        # Initialize user stats
+        cursor.execute("""
+            INSERT INTO user_stats (user_id)
+            VALUES (?)
+        """, (user_id,))
+        
+        conn.commit()
+        
+        print(f"[SUCCESS] Created new GitHub user: {final_username} (ID: {user_id})")
+        
+        # Return new user data
+        user_data = {
+            "user_id": user_id,
+            "username": final_username,
+            "email": final_email,
+            "full_name": name,
+            "company": "",
+            "created_at": datetime.now().isoformat(),
+            "is_active": 1,
+            "profile_picture": picture,
+            "auth_provider": "github"
+        }
+        
+        conn.close()
+        return user_data
         
     except Exception as e:
         print(f"GitHub authentication error: {e}")
@@ -501,6 +534,8 @@ def exchange_google_code(code: str) -> Optional[Dict]:
     try:
         import requests as http_requests
         
+        print(f"[DEBUG] Exchanging Google code, REDIRECT_URI: {REDIRECT_URI}")
+        
         # Exchange authorization code for access token
         token_url = "https://oauth2.googleapis.com/token"
         token_data = {
@@ -514,15 +549,18 @@ def exchange_google_code(code: str) -> Optional[Dict]:
         token_response = http_requests.post(token_url, data=token_data)
         
         if token_response.status_code != 200:
-            print(f"Token exchange failed: {token_response.text}")
+            print(f"[ERROR] Token exchange failed (HTTP {token_response.status_code}): {token_response.text}")
             return None
         
         token_json = token_response.json()
         access_token = token_json.get("access_token")
         
         if not access_token:
-            print("No access token received")
+            print("[ERROR] No access token received in response")
+            print(f"[DEBUG] Token response: {token_json}")
             return None
+        
+        print("[SUCCESS] Access token received")
         
         # Get user info using access token
         userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -532,10 +570,11 @@ def exchange_google_code(code: str) -> Optional[Dict]:
         )
         
         if userinfo_response.status_code != 200:
-            print(f"User info fetch failed: {userinfo_response.text}")
+            print(f"[ERROR] User info fetch failed (HTTP {userinfo_response.status_code}): {userinfo_response.text}")
             return None
         
         user_data = userinfo_response.json()
+        print(f"[SUCCESS] User info fetched: {user_data.get('email')}")
         
         return {
             "google_id": user_data.get('id'),
@@ -544,7 +583,9 @@ def exchange_google_code(code: str) -> Optional[Dict]:
             "picture": user_data.get('picture', '')
         }
     except Exception as e:
-        print(f"Google code exchange error: {e}")
+        print(f"[ERROR] Google code exchange error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 # def get_github_auth_url() -> str:

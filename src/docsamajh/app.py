@@ -636,10 +636,12 @@ def show_login_page():
             if state == "google":
                 with st.spinner("🔐 Authenticating with Google..."):
                     try:
+                        print(f"[DEBUG] Processing Google OAuth callback with code: {code[:20]}...")
                         # Exchange code for user info
                         google_info = exchange_google_code(code)
                         
                         if google_info:
+                            print(f"[DEBUG] Google info received: {google_info.get('email')}")
                             # Authenticate or create user
                             user_data = authenticate_google_user(
                                 google_info["google_id"],
@@ -649,6 +651,7 @@ def show_login_page():
                             )
                             
                             if user_data:
+                                print(f"[SUCCESS] User authenticated: {user_data.get('username')}")
                                 st.session_state.authenticated = True
                                 st.session_state.user_data = user_data
                                 st.session_state.session_id = create_session(user_data["user_id"])
@@ -658,10 +661,15 @@ def show_login_page():
                                 st.query_params.clear()
                                 st.rerun()
                             else:
+                                print("[ERROR] authenticate_google_user returned None")
                                 st.error("❌ Failed to authenticate with Google")
                         else:
+                            print("[ERROR] exchange_google_code returned None")
                             st.error("❌ Failed to exchange Google authorization code")
                     except Exception as e:
+                        print(f"[ERROR] Google authentication exception: {str(e)}")
+                        import traceback
+                        traceback.print_exc()
                         st.error(f"Google authentication failed: {str(e)}")
             
             elif state == "github":
