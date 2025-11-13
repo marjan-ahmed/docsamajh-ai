@@ -288,7 +288,7 @@ def authenticate_google_user(google_id: str, email: str, name: str, picture: str
         
         # Check if email already exists with different auth method (link accounts)
         cursor.execute("""
-            SELECT user_id, username FROM users WHERE email = ? AND is_active = 1
+            SELECT user_id, username, full_name, company, created_at FROM users WHERE email = ? AND is_active = 1
         """, (email,))
         existing = cursor.fetchone()
         
@@ -297,14 +297,25 @@ def authenticate_google_user(google_id: str, email: str, name: str, picture: str
             # Link Google account to existing user
             cursor.execute("""
                 UPDATE users
-                SET google_id = ?, profile_picture = ?, auth_provider = 'google', last_login = ?
+                SET google_id = ?, profile_picture = ?, auth_provider = 'google', last_login = ?, full_name = ?
                 WHERE user_id = ?
-            """, (google_id, picture, datetime.now(), existing[0]))
+            """, (google_id, picture, datetime.now(), name, existing[0]))
             conn.commit()
-            conn.close()
             
-            # Return updated user data
-            return authenticate_google_user(google_id, email, name, picture)
+            # Return user data directly instead of recursive call
+            user_data = {
+                "user_id": existing[0],
+                "username": existing[1],
+                "email": email,
+                "full_name": name,
+                "company": existing[3],
+                "created_at": existing[4],
+                "is_active": 1,
+                "profile_picture": picture,
+                "auth_provider": "google"
+            }
+            conn.close()
+            return user_data
         
         # Create new user (auto-registration)
         print(f"[DEBUG] Creating new user from Google account: {email}")
