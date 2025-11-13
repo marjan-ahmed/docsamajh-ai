@@ -76,7 +76,7 @@ An **agentic AI platform** that:
 
 - **Document AI**: LandingAI ADE (Parse + Extract APIs)
 - **LLM**: Google Gemini 2.5 Flash
-- **Agent Framework**: `agents` library with function tools
+- **Agent Framework**: `openai-agents` library by OpenAI
 - **Frontend**: Streamlit with custom CSS
 - **Data Processing**: Pandas, aiohttp, async/await
 - **Language**: Python 3.10+
@@ -95,8 +95,8 @@ An **agentic AI platform** that:
 
 ```bash
 # Clone the repository
-git clone https://github.com/marjan-ahmed/docsamajh.git
-cd docsamajh
+git clone https://github.com/marjan-ahmed/docsamajh-ai.git
+cd docsamajh-ai
 
 # Create virtual environment
 python -m venv .venv
@@ -476,9 +476,10 @@ MIT License - feel free to use and adapt
 
 ## 📞 Contact
 
-- **GitHub**: [github.com/marjan-ahmed/docsamjho-ai](https://github.com/marjan-ahmed/docsamjho-ai)
-- **Live Demo**: https://docsamjho-ai.streamlit.app/
-- **Email**: marjanahmed.dev@gmail.com
+- **GitHub**: [marjan-ahmed/docsamjho-ai](https://github.com/marjan-ahmed/docsamjho-ai)  
+- **Live Demo**: [docsamjho-ai.streamlit.app](https://docsamjho-ai.streamlit.app/)  
+- **YouTube Demo**: [Watch Video](https://youtu.be/mwP9qhZwSSs)  
+- **Email**: [marjanahmed.dev@gmail.com](mailto:marjanahmed.dev@gmail.com)
 
 ---
 

@@ -32,8 +32,8 @@ We are committed to providing a welcoming and inclusive environment for all cont
    ```bash
    # Click the "Fork" button on GitHub
    # Then clone your fork
-   git clone https://github.com/YOUR-USERNAME/docsamajh.git
-   cd docsamajh
+   git clone https://github.com/marjan-ahmed/docsamajh-ai.git
+   cd docsamajh-ai
    ```
 
 2. **Set Up Development Environment**
@@ -86,8 +86,7 @@ We are committed to providing a welcoming and inclusive environment for all cont
 docsamajh/
 ├── src/
 │   └── docsamajh/
-│       ├── __init__.py
-│       ├── main.py          # Legacy simple chatbot
+│       ├── __init__.py 
 │       └── app.py           # Main Streamlit application
 ├── tests/                   # Test files (to be created)
 ├── docs/                    # Additional documentation

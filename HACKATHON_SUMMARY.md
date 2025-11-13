@@ -11,9 +11,11 @@
 **Category**: Financial Document Processing & Automation  
 **Status**: ✅ Ready for Demo & Pilot Deployment  
 
-**Live Demo**: http://localhost:8502  
-**GitHub**: [Your Repository URL]  
-**Demo Video**: [YouTube URL]  
+- **Live Demo**: https://docsamajh-ai.streamlit.app
+
+- **GitHub**: https://github.com/marjan-ahmed/docsamajh-ai
+
+- **Demo Video**: [Watch here](https://youtu.be/mwP9qhZwSSs?si=b7im5GTY1ki99khj)
 
 ---
 
