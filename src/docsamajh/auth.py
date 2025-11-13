@@ -31,11 +31,15 @@ GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
 
 # Redirect URI - auto-detect environment
-# Check if running on Streamlit Cloud (production)
+# Streamlit Cloud automatically sets these environment variables
 if os.getenv("STREAMLIT_SHARING_MODE") or os.getenv("STREAMLIT_RUNTIME_ENV") == "cloud":
+    # Production - use Streamlit Cloud URL
     REDIRECT_URI = "https://docsamajh-ai.streamlit.app"
 else:
-    REDIRECT_URI = os.getenv("REDIRECT_URI")
+    # Local development - use localhost
+    REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8501")
+
+print(f"[AUTH] Using REDIRECT_URI: {REDIRECT_URI}")  # Debug log
 
 # OAuth scopes
 GOOGLE_SCOPES = [
