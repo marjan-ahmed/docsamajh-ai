@@ -13,7 +13,7 @@ import json
 import os
 import pandas as pd
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -24,7 +24,10 @@ from auth import (
     authenticate_user, create_user, create_session, end_session,
     add_audit_entry, get_user_audit_trail, save_processed_document,
     get_user_documents, update_user_stats, get_user_stats,
-    save_reconciliation, get_user_reconciliations, get_total_users
+    save_reconciliation, get_user_reconciliations, get_total_users,
+    get_google_auth_url, get_github_auth_url, verify_google_token, 
+    authenticate_google_user, authenticate_github_user, exchange_github_code,
+    exchange_google_code
 )
 
 load_dotenv()
@@ -624,10 +627,144 @@ def show_login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
+        # Check for OAuth callback
+        query_params = st.query_params
+        if "code" in query_params and "state" in query_params:
+            state = query_params["state"]
+            code = query_params["code"]
+            
+            if state == "google":
+                with st.spinner("🔐 Authenticating with Google..."):
+                    try:
+                        # Exchange code for user info
+                        google_info = exchange_google_code(code)
+                        
+                        if google_info:
+                            # Authenticate or create user
+                            user_data = authenticate_google_user(
+                                google_info["google_id"],
+                                google_info["email"],
+                                google_info["name"],
+                                google_info["picture"]
+                            )
+                            
+                            if user_data:
+                                st.session_state.authenticated = True
+                                st.session_state.user_data = user_data
+                                st.session_state.session_id = create_session(user_data["user_id"])
+                                st.session_state.session_docs_count = 0
+                                st.success(f"✅ Welcome, {user_data['full_name'] or user_data['username']}!")
+                                # Clear query params and reload
+                                st.query_params.clear()
+                                st.rerun()
+                            else:
+                                st.error("❌ Failed to authenticate with Google")
+                        else:
+                            st.error("❌ Failed to exchange Google authorization code")
+                    except Exception as e:
+                        st.error(f"Google authentication failed: {str(e)}")
+            
+            elif state == "github":
+                with st.spinner("🔐 Authenticating with GitHub..."):
+                    try:
+                        # Exchange code for user info
+                        github_info = exchange_github_code(code)
+                        
+                        if github_info:
+                            # Authenticate or create user
+                            user_data = authenticate_github_user(
+                                github_info["github_id"],
+                                github_info["email"],
+                                github_info["name"],
+                                github_info["username"],
+                                github_info["picture"]
+                            )
+                            
+                            if user_data:
+                                st.session_state.authenticated = True
+                                st.session_state.user_data = user_data
+                                st.session_state.session_id = create_session(user_data["user_id"])
+                                st.session_state.session_docs_count = 0
+                                st.success(f"✅ Welcome, {user_data['full_name'] or user_data['username']}!")
+                                # Clear query params and reload
+                                st.query_params.clear()
+                                st.rerun()
+                            else:
+                                st.error("❌ Failed to authenticate with GitHub")
+                        else:
+                            st.error("❌ Failed to exchange GitHub authorization code")
+                    except Exception as e:
+                        st.error(f"GitHub authentication failed: {str(e)}")
+            
+            else:
+                st.error(f"Unknown OAuth provider: {state}")
+        
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
             st.header("Login to Your Account")
+            
+            # Google Sign-In Button
+            google_auth_url = get_google_auth_url()
+            github_auth_url = get_github_auth_url()
+            
+            if google_auth_url or github_auth_url:
+                col_oauth1, col_oauth2 = st.columns(2)
+                
+                with col_oauth1:
+                    if google_auth_url:
+                        st.markdown(f"""
+                            <a href="{google_auth_url}" target="_self" style="
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                background: white;
+                                border: 1px solid #dadce0;
+                                border-radius: 4px;
+                                padding: 10px;
+                                text-decoration: none;
+                                color: #3c4043;
+                                font-size: 14px;
+                                font-weight: 500;
+                                width: 100%;
+                                margin-bottom: 10px;
+                            ">
+                                <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right: 8px;">
+                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                                </svg>
+                                Google
+                            </a>
+                        """, unsafe_allow_html=True)
+                
+                with col_oauth2:
+                    if github_auth_url:
+                        st.markdown(f"""
+                            <a href="{github_auth_url}" target="_self" style="
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                background: #24292e;
+                                border: 1px solid #24292e;
+                                border-radius: 4px;
+                                padding: 10px;
+                                text-decoration: none;
+                                color: white;
+                                font-size: 14px;
+                                font-weight: 500;
+                                width: 100%;
+                                margin-bottom: 10px;
+                            ">
+                                <svg width="18" height="18" viewBox="0 0 16 16" fill="white" style="margin-right: 8px;">
+                                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                                </svg>
+                                GitHub
+                            </a>
+                        """, unsafe_allow_html=True)
+                
+                st.markdown("<div style='text-align: center; margin: 20px 0;'>or</div>", unsafe_allow_html=True)
             
             with st.form("login_form"):
                 username = st.text_input("Username", key="login_username")
@@ -758,10 +895,29 @@ with st.sidebar:
     
     # User info and logout at the bottom
     st.markdown("---")
+    
+    # Display profile picture if available (Google users)
+    if user.get('profile_picture'):
+        st.markdown(f"""
+            <div style="text-align: center;">
+                <img src="{user['profile_picture']}" 
+                     style="border-radius: 50%; width: 80px; height: 80px; margin-bottom: 10px;">
+            </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown(f"### 👤 {user['full_name'] or user['username']}")
     if user['company']:
         st.markdown(f"**{user['company']}**")
     st.markdown(f"*{user['email']}*")
+    
+    # Show auth method badge
+    if user.get('auth_provider') == 'google':
+        auth_badge = "🔐 Google"
+    elif user.get('auth_provider') == 'github':
+        auth_badge = "🔐 GitHub"
+    else:
+        auth_badge = "🔑 Password"
+    st.caption(auth_badge)
     
     show_logout_button()
 

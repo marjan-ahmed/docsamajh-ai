@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
  "aiohttp>=3.13.2",
+ "google-auth-oauthlib>=1.2.3",
  "openai-agents>=0.5.0",
  "python-dotenv>=1.2.1",
  "streamlit>=1.51.0",
