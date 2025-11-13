@@ -19,6 +19,14 @@ from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel, set_tracing_disabled, function_tool
 
+# Import authentication module
+from auth import (
+    authenticate_user, create_user, create_session, end_session,
+    add_audit_entry, get_user_audit_trail, save_processed_document,
+    get_user_documents, update_user_stats, get_user_stats,
+    save_reconciliation, get_user_reconciliations, get_total_users
+)
+
 load_dotenv()
 
 # Configuration
@@ -190,6 +198,36 @@ PO_SCHEMA = {
     }
 }
 
+BANK_STATEMENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "account_number": {"type": ["string", "null"], "description": "Bank account number"},
+        "account_holder": {"type": ["string", "null"], "description": "Account holder name"},
+        "bank_name": {"type": ["string", "null"], "description": "Name of the bank"},
+        "statement_period_start": {"type": ["string", "null"], "description": "Statement start date"},
+        "statement_period_end": {"type": ["string", "null"], "description": "Statement end date"},
+        "opening_balance": {"type": ["number", "null"], "description": "Opening balance amount"},
+        "closing_balance": {"type": ["number", "null"], "description": "Closing balance amount"},
+        "total_deposits": {"type": ["number", "null"], "description": "Total deposits/credits"},
+        "total_withdrawals": {"type": ["number", "null"], "description": "Total withdrawals/debits"},
+        "currency": {"type": ["string", "null"], "description": "Currency code"},
+        "transactions": {
+            "type": "array",
+            "description": "List of transactions",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": ["string", "null"], "description": "Transaction date"},
+                    "description": {"type": ["string", "null"], "description": "Transaction description"},
+                    "amount": {"type": ["number", "null"], "description": "Transaction amount"},
+                    "type": {"type": ["string", "null"], "description": "Debit or Credit"},
+                    "balance": {"type": ["number", "null"], "description": "Balance after transaction"}
+                }
+            }
+        }
+    }
+}
+
 # ==================== Agent Tools ====================
 
 @function_tool(strict_mode=False)
@@ -232,6 +270,25 @@ async def parse_purchase_order(file_path: str):
         "markdown_preview": markdown[:500]
     }
 
+@function_tool(strict_mode=False)
+async def parse_bank_statement(file_path: str):
+    """
+    Parse and extract structured data from a bank statement document.
+    Returns account details, balance information, and transaction history.
+    """
+    parse_result = await ade_parse_document(file_path, split_pages=False)
+    markdown = parse_result.get("markdown", "")
+    metadata = parse_result.get("metadata", {})
+    
+    extract_result = await ade_extract_data(markdown, BANK_STATEMENT_SCHEMA)
+    extracted = extract_result.get("extraction", {})
+    
+    return {
+        "statement_data": extracted,
+        "metadata": metadata,
+        "markdown_preview": markdown[:500]
+    }
+
 # Helper functions that can be called directly (not decorated)
 async def process_invoice_direct(file_path: str):
     """Direct call to parse invoice without going through agent"""
@@ -259,6 +316,21 @@ async def process_po_direct(file_path: str):
     
     return {
         "po_data": extracted,
+        "metadata": metadata,
+        "markdown_preview": markdown[:500]
+    }
+
+async def process_bank_statement_direct(file_path: str):
+    """Direct call to parse bank statement without going through agent"""
+    parse_result = await ade_parse_document(file_path, split_pages=False)
+    markdown = parse_result.get("markdown", "")
+    metadata = parse_result.get("metadata", {})
+    
+    extract_result = await ade_extract_data(markdown, BANK_STATEMENT_SCHEMA)
+    extracted = extract_result.get("extraction", {})
+    
+    return {
+        "statement_data": extracted,
         "metadata": metadata,
         "markdown_preview": markdown[:500]
     }
@@ -494,10 +566,10 @@ async def compliance_check(invoice_data: dict):
 doc_processor_agent = Agent(
     name="Document Processor",
     instructions="""You are a financial document processing specialist.
-    Parse invoices and purchase orders accurately, extract all financial data,
-    and ensure data quality. Use the parse_invoice and parse_purchase_order tools.""",
+    Parse invoices, purchase orders, and bank statements accurately, extract all financial data,
+    and ensure data quality. Use the parse_invoice, parse_purchase_order, and parse_bank_statement tools.""",
     model=model,
-    tools=[parse_invoice, parse_purchase_order]
+    tools=[parse_invoice, parse_purchase_order, parse_bank_statement]
 )
 
 # Reconciliation Agent
@@ -531,6 +603,103 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Initialize session state for authentication
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user_data" not in st.session_state:
+    st.session_state.user_data = None
+if "session_id" not in st.session_state:
+    st.session_state.session_id = None
+if "session_docs_count" not in st.session_state:
+    st.session_state.session_docs_count = 0
+
+# ==================== Authentication UI ====================
+
+def show_login_page():
+    """Display login/registration page"""
+    st.markdown('<p class="big-title">📊 DocSamajh AI</p>', unsafe_allow_html=True)
+    st.markdown("**Intelligent Financial Document Reconciliation Platform** | Powered by LandingAI ADE")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
+        
+        with tab1:
+            st.header("Login to Your Account")
+            
+            with st.form("login_form"):
+                username = st.text_input("Username", key="login_username")
+                password = st.text_input("Password", type="password", key="login_password")
+                submit = st.form_submit_button("🚀 Login", use_container_width=True)
+                
+                if submit:
+                    if username and password:
+                        user_data = authenticate_user(username, password)
+                        if user_data:
+                            st.session_state.authenticated = True
+                            st.session_state.user_data = user_data
+                            st.session_state.session_id = create_session(user_data["user_id"])
+                            st.session_state.session_docs_count = 0
+                            st.success(f"✅ Welcome back, {user_data['full_name'] or user_data['username']}!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Invalid username or password")
+                    else:
+                        st.warning("⚠️ Please enter both username and password")
+        
+        with tab2:
+            st.header("Create New Account")
+            
+            with st.form("register_form"):
+                new_username = st.text_input("Username", key="reg_username")
+                new_email = st.text_input("Email", key="reg_email")
+                new_password = st.text_input("Password", type="password", key="reg_password")
+                confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm")
+                full_name = st.text_input("Full Name (Optional)", key="reg_fullname")
+                company = st.text_input("Company (Optional)", key="reg_company")
+                
+                register = st.form_submit_button("📝 Create Account", use_container_width=True)
+                
+                if register:
+                    if not all([new_username, new_email, new_password, confirm_password]):
+                        st.warning("⚠️ Please fill in all required fields")
+                    elif new_password != confirm_password:
+                        st.error("❌ Passwords do not match")
+                    elif len(new_password) < 6:
+                        st.error("❌ Password must be at least 6 characters")
+                    else:
+                        if create_user(new_username, new_email, new_password, full_name, company):
+                            st.success("✅ Account created successfully! Please login.")
+                        else:
+                            st.error("❌ Username or email already exists")
+        
+        # Stats section
+        st.markdown("---")
+        st.info(f"👥 **{get_total_users()}** users trust DocSamajh AI for their financial document processing")
+
+def show_logout_button():
+    """Display logout button in sidebar"""
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
+        # End session
+        if st.session_state.session_id:
+            end_session(st.session_state.session_id, st.session_state.session_docs_count)
+        
+        # Clear session state
+        st.session_state.authenticated = False
+        st.session_state.user_data = None
+        st.session_state.session_id = None
+        st.session_state.session_docs_count = 0
+        st.rerun()
+
+# Check authentication
+if not st.session_state.authenticated:
+    show_login_page()
+    st.stop()
+
+# ==================== Authenticated App ====================
+
 # Custom CSS
 st.markdown("""
 <style>
@@ -553,7 +722,11 @@ st.markdown("**Intelligent Financial Document Reconciliation Platform** | Powere
 
 # Sidebar
 with st.sidebar:
-    st.image("docsamajhai.jpg", width=120)
+    try:
+        st.image("docsamajhai.jpg", width=120)
+    except:
+        pass
+    
     st.markdown("---")
     st.header("🎯 Capabilities")
     st.markdown("""
@@ -566,23 +739,44 @@ with st.sidebar:
     """)
     
     st.markdown("---")
-    st.header("📈 Session Stats")
-    if "stats" not in st.session_state:
-        st.session_state.stats = {"processed": 0, "matched": 0, "flagged": 0}
+    st.header("📈 Your Statistics")
+    
+    # Get user stats from database
+    user = st.session_state.user_data
+    user_stats = get_user_stats(user["user_id"])
     
     col1, col2 = st.columns(2)
-    col1.metric("Processed", st.session_state.stats["processed"])
-    col2.metric("Matched", st.session_state.stats["matched"])
-    st.metric("Flagged", st.session_state.stats["flagged"])
+    col1.metric("Processed", user_stats["processed"])
+    col2.metric("Matched", user_stats["matched"])
+    st.metric("Flagged", user_stats["flagged"])
+    
+    # Document type breakdown
+    with st.expander("📊 Document Breakdown"):
+        st.metric("Invoices", user_stats["invoices"])
+        st.metric("Purchase Orders", user_stats["pos"])
+        st.metric("Bank Statements", user_stats["statements"])
+    
+    # User info and logout at the bottom
+    st.markdown("---")
+    st.markdown(f"### 👤 {user['full_name'] or user['username']}")
+    if user['company']:
+        st.markdown(f"**{user['company']}**")
+    st.markdown(f"*{user['email']}*")
+    
+    show_logout_button()
 
 # Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📄 Single Document", "🔄 Reconciliation", "📊 Batch Processing", "📜 Audit Trail"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📄 Single Document", 
+    "🔄 Reconciliation", 
+    "📊 Batch Processing", 
+    "📜 Audit Trail",
+    "📁 My Documents"
+])
 
-# Initialize session state
-if "audit_trail" not in st.session_state:
-    st.session_state.audit_trail = []
-if "processed_docs" not in st.session_state:
-    st.session_state.processed_docs = {}
+# Get user context
+user_id = st.session_state.user_data["user_id"]
+session_id = st.session_state.session_id
 
 # TAB 1: Single Document Processing
 with tab1:
@@ -598,7 +792,53 @@ with tab1:
         )
     
     with col2:
-        doc_type = st.selectbox("Document Type", ["Invoice", "Purchase Order", "Bank Statement"])
+        # Auto-detect document type when file is uploaded
+        if uploaded_file:
+            # Check if this is a new file
+            if "last_uploaded_file" not in st.session_state or st.session_state.last_uploaded_file != uploaded_file.name:
+                st.session_state.last_uploaded_file = uploaded_file.name
+                
+                # Perform auto-detection immediately
+                with st.spinner("🔍 Auto-detecting document type..."):
+                    # Save file temporarily for detection
+                    temp_detect_path = f"temp_detect_{uploaded_file.name}"
+                    with open(temp_detect_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    try:
+                        async def detect_type():
+                            parse_result = await ade_parse_document(temp_detect_path, split_pages=False)
+                            markdown = parse_result.get("markdown", "").lower()
+                            
+                            # Enhanced keyword-based detection
+                            if "invoice" in markdown or "bill to" in markdown or "invoice number" in markdown or "invoice no" in markdown or "invoice date" in markdown:
+                                return "Invoice"
+                            elif "purchase order" in markdown or "po number" in markdown or "p.o. number" in markdown or "order date" in markdown or "delivery date" in markdown:
+                                return "Purchase Order"
+                            elif "bank statement" in markdown or "account statement" in markdown or "opening balance" in markdown or "closing balance" in markdown or "transaction" in markdown or "statement period" in markdown:
+                                return "Bank Statement"
+                            else:
+                                # Default to invoice if unclear
+                                return "Invoice"
+                        
+                        detected = asyncio.run(detect_type())
+                        st.session_state.detected_doc_type = detected
+                        st.success(f"🎯 Auto-detected: **{detected}**")
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not auto-detect type: {str(e)}")
+                        st.session_state.detected_doc_type = "Invoice"
+                    finally:
+                        if os.path.exists(temp_detect_path):
+                            os.remove(temp_detect_path)
+        
+        # Show dropdown with auto-selected type
+        doc_type_options = ["Invoice", "Purchase Order", "Bank Statement"]
+        if uploaded_file and st.session_state.get("detected_doc_type"):
+            default_index = doc_type_options.index(st.session_state.detected_doc_type)
+            doc_type = st.selectbox("Document Type", doc_type_options, index=default_index)
+        else:
+            doc_type = st.selectbox("Document Type", doc_type_options)
+        
         process_btn = st.button("🚀 Process Document", type="primary", use_container_width=True)
     
     if uploaded_file and process_btn:
@@ -644,15 +884,17 @@ with tab1:
                     else:
                         st.json(result)
                     
-                    # Update stats
-                    st.session_state.stats["processed"] += 1
-                    st.session_state.audit_trail.append({
-                        "timestamp": datetime.now(),
-                        "action": "Single Document Processing",
-                        "file": uploaded_file.name,
-                        "type": doc_type,
-                        "status": "Success"
-                    })
+                    # Save to database
+                    save_processed_document(
+                        user_id, session_id, uploaded_file.name, "Invoice",
+                        json.dumps(invoice_data), json.dumps(metadata), "Success"
+                    )
+                    add_audit_entry(
+                        user_id, session_id, "Single Document Processing",
+                        uploaded_file.name, "Invoice", "Success"
+                    )
+                    update_user_stats(user_id, processed=1, invoices=1)
+                    st.session_state.session_docs_count += 1
                 
                 elif doc_type == "Purchase Order":
                     async def process():
@@ -682,14 +924,69 @@ with tab1:
                     else:
                         st.json(result)
                     
-                    st.session_state.stats["processed"] += 1
-                    st.session_state.audit_trail.append({
-                        "timestamp": datetime.now(),
-                        "action": "Single Document Processing",
-                        "file": uploaded_file.name,
-                        "type": doc_type,
-                        "status": "Success"
-                    })
+                    # Save to database
+                    save_processed_document(
+                        user_id, session_id, uploaded_file.name, "Purchase Order",
+                        json.dumps(po_data), json.dumps(metadata), "Success"
+                    )
+                    add_audit_entry(
+                        user_id, session_id, "Single Document Processing",
+                        uploaded_file.name, "Purchase Order", "Success"
+                    )
+                    update_user_stats(user_id, processed=1, pos=1)
+                    st.session_state.session_docs_count += 1
+                
+                elif doc_type == "Bank Statement":
+                    async def process():
+                        return await process_bank_statement_direct(file_path)
+                    
+                    result = asyncio.run(process())
+                    
+                    st.success("✅ Document processed successfully!")
+                    
+                    if isinstance(result, dict):
+                        statement_data = result.get("statement_data", {})
+                        metadata = result.get("metadata", {})
+                        
+                        st.markdown("### 🏦 Extracted Bank Statement Data")
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        col1.metric("Account #", statement_data.get("account_number", "N/A"))
+                        col2.metric("Opening Balance", f"${statement_data.get('opening_balance', 0):,.2f}")
+                        col3.metric("Closing Balance", f"${statement_data.get('closing_balance', 0):,.2f}")
+                        col4.metric("Transactions", len(statement_data.get("transactions", [])))
+                        
+                        # Additional metrics
+                        col5, col6, col7 = st.columns(3)
+                        col5.metric("Total Deposits", f"${statement_data.get('total_deposits', 0):,.2f}")
+                        col6.metric("Total Withdrawals", f"${statement_data.get('total_withdrawals', 0):,.2f}")
+                        col7.metric("Bank", statement_data.get("bank_name", "N/A")[:20])
+                        
+                        # Transaction table
+                        if statement_data.get("transactions"):
+                            st.markdown("#### 📊 Transactions")
+                            transactions_df = pd.DataFrame(statement_data["transactions"])
+                            st.dataframe(transactions_df, use_container_width=True)
+                        
+                        with st.expander("View Full Extracted Data"):
+                            st.json(statement_data)
+                        
+                        with st.expander("View Processing Metadata"):
+                            st.json(metadata)
+                    else:
+                        st.json(result)
+                    
+                    # Save to database
+                    save_processed_document(
+                        user_id, session_id, uploaded_file.name, "Bank Statement",
+                        json.dumps(statement_data), json.dumps(metadata), "Success"
+                    )
+                    add_audit_entry(
+                        user_id, session_id, "Single Document Processing",
+                        uploaded_file.name, "Bank Statement", "Success"
+                    )
+                    update_user_stats(user_id, processed=1, statements=1)
+                    st.session_state.session_docs_count += 1
                 
             except Exception as e:
                 st.error(f"❌ Error processing document: {str(e)}")
@@ -697,13 +994,11 @@ with tab1:
                 with st.expander("View Error Details"):
                     st.code(traceback.format_exc())
                 
-                st.session_state.audit_trail.append({
-                    "timestamp": datetime.now(),
-                    "action": "Single Document Processing",
-                    "file": uploaded_file.name,
-                    "type": doc_type,
-                    "status": f"Failed: {str(e)}"
-                })
+                # Save error to database
+                add_audit_entry(
+                    user_id, session_id, "Single Document Processing",
+                    uploaded_file.name, doc_type, f"Failed: {str(e)}"
+                )
             finally:
                 if os.path.exists(file_path):
                     os.remove(file_path)
@@ -808,12 +1103,24 @@ with tab2:
                     for warning in compliance["warnings"]:
                         st.warning(f"⚠️ {warning}")
                 
+                # Save reconciliation to database
+                save_reconciliation(
+                    user_id, session_id, invoice_file.name, po_file.name,
+                    risk_level, recon.get("matched", False),
+                    recon.get("amount_variance", 0), recon.get("variance_percentage", 0),
+                    ", ".join(recon.get("discrepancies", []))
+                )
+                add_audit_entry(
+                    user_id, session_id, "Reconciliation",
+                    f"{invoice_file.name} vs {po_file.name}", "Reconciliation", "Success",
+                    f"Risk: {risk_level}"
+                )
+                
                 # Update stats
-                st.session_state.stats["processed"] += 2
-                if recon.get("matched"):
-                    st.session_state.stats["matched"] += 1
-                if risk_level == "HIGH":
-                    st.session_state.stats["flagged"] += 1
+                matched_val = 1 if recon.get("matched") else 0
+                flagged_val = 1 if risk_level == "HIGH" else 0
+                update_user_stats(user_id, processed=2, matched=matched_val, flagged=flagged_val)
+                st.session_state.session_docs_count += 2
                 
             except Exception as e:
                 st.error(f"Reconciliation failed: {str(e)}")
@@ -901,22 +1208,93 @@ with tab3:
 
 # TAB 4: Audit Trail
 with tab4:
-    st.header("Processing Audit Trail")
+    st.header("📜 Your Processing Audit Trail")
+    st.markdown(f"**User:** {user['username']} | **Session ID:** {session_id}")
     
-    if st.session_state.audit_trail:
-        audit_df = pd.DataFrame(st.session_state.audit_trail)
+    # Filters
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        limit = st.slider("Number of records to display", 10, 500, 100)
+    with col2:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.rerun()
+    
+    # Get audit trail from database
+    audit_data = get_user_audit_trail(user_id, limit)
+    
+    if audit_data:
+        audit_df = pd.DataFrame(audit_data)
         st.dataframe(audit_df, use_container_width=True)
+        
+        # Stats
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Entries", len(audit_data))
+        success_count = len([a for a in audit_data if "Success" in a.get("status", "")])
+        col2.metric("Successful", success_count)
+        fail_count = len([a for a in audit_data if "Failed" in a.get("status", "")])
+        col3.metric("Failed", fail_count)
         
         # Export
         csv = audit_df.to_csv(index=False)
         st.download_button(
             "📥 Export Audit Log",
             csv,
-            f"audit_trail_{datetime.now().strftime('%Y%m%d')}.csv",
+            f"audit_trail_{user['username']}_{datetime.now().strftime('%Y%m%d')}.csv",
             "text/csv"
         )
     else:
-        st.info("No processing history yet. Start by uploading and processing documents!")
+        st.info("No audit trail yet. Start by uploading and processing documents!")
+
+# TAB 5: My Documents
+with tab5:
+    st.header("📁 My Processed Documents")
+    
+    # Filters
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        doc_limit = st.slider("Documents to display", 10, 200, 50)
+    with col2:
+        filter_type = st.selectbox("Filter by type", ["All", "Invoice", "Purchase Order", "Bank Statement"])
+    with col3:
+        if st.button("🔄 Refresh Docs", use_container_width=True):
+            st.rerun()
+    
+    # Get documents from database
+    all_docs = get_user_documents(user_id, doc_limit)
+    
+    # Filter by type
+    if filter_type != "All":
+        all_docs = [d for d in all_docs if d["doc_type"] == filter_type]
+    
+    if all_docs:
+        st.markdown(f"**Found {len(all_docs)} documents**")
+        
+        # Display as cards
+        for idx, doc in enumerate(all_docs):
+            with st.expander(f"📄 {doc['file_name']} - {doc['doc_type']} ({doc['processed_at']})"):
+                col1, col2 = st.columns(2)
+                col1.markdown(f"**Status:** {doc['status']}")
+                col2.markdown(f"**Processed:** {doc['processed_at']}")
+                
+                if doc.get('data'):
+                    try:
+                        data = json.loads(doc['data'])
+                        st.json(data)
+                    except:
+                        st.text(doc['data'])
+        
+        # Export
+        docs_df = pd.DataFrame(all_docs)
+        csv = docs_df.to_csv(index=False)
+        st.download_button(
+            "📥 Download Document List",
+            csv,
+            f"my_documents_{user['username']}_{datetime.now().strftime('%Y%m%d')}.csv",
+            "text/csv",
+            use_container_width=True
+        )
+    else:
+        st.info("No documents found. Upload and process documents to see them here!")
 
 # Footer
 st.markdown("---")
