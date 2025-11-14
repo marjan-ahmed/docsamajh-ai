@@ -341,33 +341,42 @@ async def process_bank_statement_direct(file_path: str):
 async def reconcile_direct(invoice_data: dict, po_data: dict):
     """Direct reconciliation without going through agent"""
     discrepancies = []
-    invoice_total = invoice_data.get("total_amount", 0)
-    po_total = po_data.get("total_amount", 0)
+    invoice_total = invoice_data.get("total_amount") or 0
+    po_total = po_data.get("total_amount") or 0
     
-    # Check vendor match
-    if invoice_data.get("vendor_name", "").lower() != po_data.get("vendor_name", "").lower():
+    # Check vendor match (handle None values)
+    invoice_vendor = (invoice_data.get("vendor_name") or "").lower()
+    po_vendor = (po_data.get("vendor_name") or "").lower()
+    if invoice_vendor != po_vendor:
         discrepancies.append("Vendor name mismatch")
     
     # Check amount variance
-    amount_variance = abs(invoice_total - po_total)
+    amount_variance = abs(invoice_total - po_total) if invoice_total and po_total else 0
     variance_pct = (amount_variance / po_total * 100) if po_total > 0 else 0
     
     if variance_pct > 5:
         discrepancies.append(f"Amount variance: ${amount_variance:.2f} ({variance_pct:.1f}%)")
     
-    # Check line items
-    invoice_items = invoice_data.get("line_items", [])
-    po_items = po_data.get("line_items", [])
+    # Check line items (handle None values)
+    invoice_items = invoice_data.get("line_items") or []
+    po_items = po_data.get("line_items") or []
     
     matched_items = 0
     for inv_item in invoice_items:
+        inv_desc = (inv_item.get("description") or "").lower()
         for po_item in po_items:
-            if inv_item.get("description", "").lower() == po_item.get("description", "").lower():
+            po_desc = (po_item.get("description") or "").lower()
+            if inv_desc and po_desc and inv_desc == po_desc:
                 matched_items += 1
-                # Check quantity and price
-                if inv_item.get("quantity") != po_item.get("quantity"):
+                # Check quantity and price (handle None values)
+                inv_qty = inv_item.get("quantity") or 0
+                po_qty = po_item.get("quantity") or 0
+                inv_price = inv_item.get("unit_price") or 0
+                po_price = po_item.get("unit_price") or 0
+                
+                if inv_qty != po_qty:
                     discrepancies.append(f"Quantity mismatch for {inv_item.get('description')}")
-                if abs(inv_item.get("unit_price", 0) - po_item.get("unit_price", 0)) > 0.01:
+                if abs(inv_price - po_price) > 0.01:
                     discrepancies.append(f"Price mismatch for {inv_item.get('description')}")
     
     # Determine risk level
