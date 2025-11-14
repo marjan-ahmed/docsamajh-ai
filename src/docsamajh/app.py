@@ -1243,7 +1243,7 @@ with tab2:
                 risk_level = recon.get("risk_level", "MEDIUM")
                 
                 st.markdown(f"""
-                <div class="{risk_colors.get(risk_level, 'warning')}-box">
+                <div style="bg-[rgba(222,91,91,1)]" class="{risk_colors.get(risk_level, 'warning')}-box">
                 <h3>Risk Level: {risk_level}</h3>
                 <p><strong>Recommendation:</strong> {recon.get('recommendation')}</p>
                 </div>
