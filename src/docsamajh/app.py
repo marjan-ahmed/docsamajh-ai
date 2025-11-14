@@ -414,22 +414,23 @@ async def compliance_check_direct(invoice_data: dict):
         if not invoice_data.get(field):
             issues.append(f"Missing required field: {field}")
     
-    # Tax validation
-    subtotal = invoice_data.get("subtotal", 0)
-    tax = invoice_data.get("tax_amount", 0)
-    total = invoice_data.get("total_amount", 0)
+    # Tax validation (handle None values)
+    subtotal = invoice_data.get("subtotal") or 0
+    tax = invoice_data.get("tax_amount") or 0
+    total = invoice_data.get("total_amount") or 0
     
     expected_total = subtotal + tax
-    if abs(total - expected_total) > 0.02:
+    if subtotal > 0 and tax > 0 and abs(total - expected_total) > 0.02:
         issues.append(f"Tax calculation error: {subtotal} + {tax} ≠ {total}")
     
     # Tax rate reasonability (0-20%)
-    if subtotal > 0:
+    if subtotal > 0 and tax > 0:
         effective_tax_rate = (tax / subtotal) * 100
         if effective_tax_rate > 20:
             warnings.append(f"Unusually high tax rate: {effective_tax_rate:.1f}%")
-        elif effective_tax_rate < 0:
-            issues.append("Negative tax amount")
+    
+    if tax < 0:
+        issues.append("Negative tax amount")
     
     # Amount reasonability
     if total <= 0:
