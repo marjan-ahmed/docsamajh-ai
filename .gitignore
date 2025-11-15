@@ -6,7 +6,6 @@ dist/
 wheels/
 *.egg-info
 .env
-.env.example
 .env.local
 .env.*.local
 
