@@ -1017,18 +1017,13 @@ with tab1:
     
     if uploaded_file and process_btn:
         with st.spinner("Processing document with ADE..."):
-            # Save file
             file_path = f"temp_{uploaded_file.name}"
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             
             try:
-                # Process based on type - call tool directly instead of using agent
                 if doc_type == "Invoice":
-                    async def process():
-                        return await process_invoice_direct(file_path)
-                    
-                    result = asyncio.run(process())
+                    result = asyncio.run(process_invoice_direct(file_path))
                     
                     st.success("✅ Document processed successfully!")
                     
@@ -1071,10 +1066,7 @@ with tab1:
                     st.session_state.session_docs_count += 1
                 
                 elif doc_type == "Purchase Order":
-                    async def process():
-                        return await process_po_direct(file_path)
-                    
-                    result = asyncio.run(process())
+                    result = asyncio.run(process_po_direct(file_path))
                     
                     st.success("✅ Document processed successfully!")
                     
@@ -1111,10 +1103,7 @@ with tab1:
                     st.session_state.session_docs_count += 1
                 
                 elif doc_type == "Bank Statement":
-                    async def process():
-                        return await process_bank_statement_direct(file_path)
-                    
-                    result = asyncio.run(process())
+                    result = asyncio.run(process_bank_statement_direct(file_path))
                     
                     st.success("✅ Document processed successfully!")
                     
@@ -1208,21 +1197,19 @@ with tab2:
                 f.write(po_file.getbuffer())
             
             try:
-                # Process both documents
                 async def reconcile():
-                    # Parse invoice
-                    inv_result = await process_invoice_direct(invoice_path)
-                    invoice_data = inv_result.get("invoice_data", {})
+                    inv_task = process_invoice_direct(invoice_path)
+                    po_task = process_po_direct(po_path)
                     
-                    # Parse PO
-                    po_result = await process_po_direct(po_path)
+                    inv_result, po_result = await asyncio.gather(inv_task, po_task)
+                    
+                    invoice_data = inv_result.get("invoice_data", {})
                     po_data = po_result.get("po_data", {})
                     
-                    # Reconcile
-                    recon_result = await reconcile_direct(invoice_data, po_data)
+                    recon_task = reconcile_direct(invoice_data, po_data)
+                    compliance_task = compliance_check_direct(invoice_data)
                     
-                    # Compliance check
-                    compliance_result = await compliance_check_direct(invoice_data)
+                    recon_result, compliance_result = await asyncio.gather(recon_task, compliance_task)
                     
                     return {
                         "invoice": invoice_data,
@@ -1320,44 +1307,47 @@ with tab3:
         progress = st.progress(0)
         status = st.empty()
         
-        results_data = []
-        
-        for idx, file in enumerate(batch_files):
-            status.text(f"Processing {file.name}...")
-            progress.progress((idx + 1) / len(batch_files))
-            
+        file_paths = []
+        for file in batch_files:
             file_path = f"temp_{file.name}"
             with open(file_path, "wb") as f:
                 f.write(file.getbuffer())
+            file_paths.append((file.name, file_path))
+        
+        async def process_batch():
+            async def process_single(idx, filename, filepath):
+                try:
+                    result = await process_invoice_direct(filepath)
+                    invoice_data = result.get("invoice_data", {})
+                    return {
+                        "Filename": filename,
+                        "Invoice #": invoice_data.get("invoice_number", "N/A"),
+                        "Vendor": invoice_data.get("vendor_name", "N/A"),
+                        "Total": invoice_data.get("total_amount", 0),
+                        "Date": invoice_data.get("invoice_date", "N/A"),
+                        "Status": "✅ Processed"
+                    }
+                except Exception as e:
+                    return {
+                        "Filename": filename,
+                        "Invoice #": "Error",
+                        "Vendor": "Error",
+                        "Total": 0,
+                        "Date": "Error",
+                        "Status": f"❌ {str(e)}"
+                    }
             
-            try:
-                async def process():
-                    return await process_invoice_direct(file_path)
-                
-                result = asyncio.run(process())
-                invoice_data = result.get("invoice_data", {})
-                
-                results_data.append({
-                    "Filename": file.name,
-                    "Invoice #": invoice_data.get("invoice_number", "N/A"),
-                    "Vendor": invoice_data.get("vendor_name", "N/A"),
-                    "Total": invoice_data.get("total_amount", 0),
-                    "Date": invoice_data.get("invoice_date", "N/A"),
-                    "Status": "✅ Processed"
-                })
-                
-            except Exception as e:
-                results_data.append({
-                    "Filename": file.name,
-                    "Invoice #": "Error",
-                    "Vendor": "Error",
-                    "Total": 0,
-                    "Date": "Error",
-                    "Status": f"❌ {str(e)}"
-                })
-            finally:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+            tasks = [process_single(idx, fname, fpath) for idx, (fname, fpath) in enumerate(file_paths)]
+            results = await asyncio.gather(*tasks)
+            return results
+        
+        status.text("Processing all the documents...")
+        results_data = asyncio.run(process_batch())
+        progress.progress(1.0)
+        
+        for fpath in [fp for _, fp in file_paths]:
+            if os.path.exists(fpath):
+                os.remove(fpath)
         
         status.text("Batch processing complete!")
         
