@@ -478,7 +478,7 @@ MIT License - feel free to use and adapt
 
 - **GitHub**: [marjan-ahmed/docsamajh-ai](https://github.com/marjan-ahmed/docsamajh-ai)  
 - **Live Demo**: [docsamajh-ai.streamlit.app](https://docsamjh-ai.streamlit.app/)  
-- **YouTube Demo**: [Watch Video](https://youtu.be/mwP9qhZwSSs)  
+- **YouTube Demo**: [Watch Video](https://youtu.be/vRoXVQ5HMYo)  
 - **Email**: [marjanahmed.dev@gmail.com](mailto:marjanahmed.dev@gmail.com)
 
 ---
