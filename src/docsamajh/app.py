@@ -1464,5 +1464,5 @@ with tab5:
 st.markdown("---")
 col1, col2, col3 = st.columns(3)
 col1.markdown("**Powered by:** LandingAI ADE + Gemini")
-col2.markdown("**Built for:** AI Financial Hackathon 2025")
+# col2.markdown("**Built for:** AI Financial Hackathon 2025")
 col3.markdown("**Team:** Marvix")
